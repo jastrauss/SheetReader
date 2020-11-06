@@ -22,7 +22,7 @@ except ImportError:
 class GoogleSheetsConnector:
 
     # If modifying these scopes, delete your previously saved credentials
-    # at ~/.credentials/sheets.googleapis.com-python-quickstart.json
+    # at .credentials/sheets.googleapis.com-python-quickstart.json
     SCOPES = 'https://www.googleapis.com/auth/spreadsheets'
     CLIENT_SECRET_FILE = 'credentials.json'
     APPLICATION_NAME = 'Google Sheets API Python Quickstart'
