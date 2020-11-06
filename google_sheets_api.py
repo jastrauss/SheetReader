@@ -11,6 +11,7 @@ from apiclient import discovery
 from oauth2client import client
 from oauth2client import tools
 from oauth2client.file import Storage
+from six import iteritems
 
 try:
     import argparse
@@ -23,7 +24,7 @@ class GoogleSheetsConnector:
     # If modifying these scopes, delete your previously saved credentials
     # at ~/.credentials/sheets.googleapis.com-python-quickstart.json
     SCOPES = 'https://www.googleapis.com/auth/spreadsheets'
-    CLIENT_SECRET_FILE = 'client_secret.json'
+    CLIENT_SECRET_FILE = 'credentials.json'
     APPLICATION_NAME = 'Google Sheets API Python Quickstart'
 
     def __init__(self, spreadsheet_id, sheet_name):
@@ -40,7 +41,6 @@ class GoogleSheetsConnector:
         Returns:
             Credentials, the obtained credential.
         """
-        # home_dir = os.path.expanduser('~')
         current_dir = os.getcwd()
         credential_dir = os.path.join(current_dir, '.credentials')
         if not os.path.exists(credential_dir):
@@ -51,13 +51,13 @@ class GoogleSheetsConnector:
         store = Storage(credential_path)
         credentials = store.get()
         if not credentials or credentials.invalid:
-            flow = client.flow_from_clientsecrets(CLIENT_SECRET_FILE, SCOPES)
-            flow.user_agent = APPLICATION_NAME
+            flow = client.flow_from_clientsecrets(self.CLIENT_SECRET_FILE, self.SCOPES)
+            flow.user_agent = self.APPLICATION_NAME
             if flags:
                 credentials = tools.run_flow(flow, store, flags)
             else: # Needed only for compatibility with Python 2.6
                 credentials = tools.run(flow, store)
-            print 'Storing credentials to ' + credential_path
+            print('Storing credentials to ' + credential_path)
         return credentials
 
     def set_service(self):
@@ -87,7 +87,7 @@ class GoogleSheetsConnector:
 
     def bulk_write_range(self, cell_index_to_value_map):
         updates = []
-        for cell_index, value in cell_index_to_value_map.iteritems():
+        for cell_index, value in iteritems(cell_index_to_value_map):
             range_name = '%s!%s:%s' % (self.sheet_name, cell_index, cell_index)
             value_formatted = [[value]]
             updates.append({

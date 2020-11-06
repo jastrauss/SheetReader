@@ -21,12 +21,12 @@ header_range = ('A1','D1') # Range with the headers, one row
 data_range = ('A2','D10') # Range of the data
 
 reader = SheetReader(workbook_id=workbook_id, sheet_name=sheet_name, header_range=header_range, data_range=data_range)
-print reader.headers
+print(reader.headers)
 
 for row in reader:
 
     name = row["name"]
-    print "Hello", name
+    print("Hello", name)
 
     # Reverse the name
     row["Reversed Name"] = name[::-1]

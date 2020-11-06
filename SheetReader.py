@@ -11,7 +11,7 @@ def get_row_from_cell(cell):
 def get_col_from_cell(cell):
     return re.split('\d+', cell)[0]
 
-""" 0 => A """ 
+""" 0 => A """
 def number_to_excel_column(n):
     string = ""
     while n > 0:
@@ -19,7 +19,7 @@ def number_to_excel_column(n):
         string = chr(65 + remainder) + string
     return string
 
-""" A => 0 """ 
+""" A => 0 """
 def excel_column_to_number(col):
     num = 0
     for c in col:
@@ -28,7 +28,11 @@ def excel_column_to_number(col):
     return num
 
 class SheetReader:
-    
+    """
+    Represents a connection to a Google Sheet. Returns an iterator of Row objects
+    which provide access to each row at a time.
+    """
+
     def __init__(self, workbook_id, sheet_name, header_range=[], data_range=[], read_chunk_size=100, write_chunk_size=100, auto_update=True):
 
         self.workbook_id = workbook_id
@@ -63,7 +67,7 @@ class SheetReader:
 
         if len(data_range) < 2:
             raise ValueError('SheetReader data_range must contain at a start and end cell')
-        
+
         if len(header_range) < 2:
             raise ValueError('SheetReader header_range must contain at a start and end cell')
 
@@ -76,7 +80,7 @@ class SheetReader:
         raw_values = self.connection.read_range(self.header_start_cell, self.header_end_cell)
         self.headers = raw_values[0]
 
-        # Create a map from header name to it's columnd index, eg. 'Name' => Column 0
+        # Create a map from header name to it's column index, eg. 'Name' => Column 0
         # We use this map to access elements in a row by their header name, eg. Row.get('Name') => Jim
         self.header_map = {header: index for (index, header) in enumerate(self.headers)}
 
@@ -88,7 +92,7 @@ class SheetReader:
         self.connection.bulk_write_range(self.write_map)
         self.write_map = {}
 
-   
+
     def get_row_values(self, row_index):
         '''
             Rather than make a request to the spreadsheet for each row,
@@ -120,8 +124,8 @@ class SheetReader:
 
     def __iter__(self):
         return self
- 
-    def next(self): # Python 3: def __next__(self)
+
+    def __next__(self):
         if self.current_row_index > get_row_from_cell(self.data_end_cell) - 1:
             raise StopIteration
         else:
@@ -132,10 +136,19 @@ class SheetReader:
             data_range = (data_start_cell, data_end_cell)
             return Row(self, data_range, row_values)
 
+        next = __next__ # Python 2 iterators look for "next"
+
     def __del__(self):
-        self.update()
+        if bool(self.write_map):
+            self.update()
 
 class Row:
+    """
+    A dict like object that represent one row in a Google sheet.
+
+    Read a value: row[column_name]
+    Write a value: row[column_name] = new_value
+    """
 
     def __init__(self, sheet_reader_instance, data_range, values):
 
@@ -193,7 +206,7 @@ class Row:
         # return ','.join(self.values)
 
         pretty_dict = {}
-        for k, v in self.header_map:
+        for k, v in self.header_map.items():
             pretty_dict[k] = self.values[v]
 
         return str(pretty_dict)
