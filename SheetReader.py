@@ -212,7 +212,7 @@ class Row:
         field_index = self.header_map.get(key)
 
         # If a row has empty columns at the end, we need to extend the array
-        if field_index > len(self.values):
+        if field_index >= len(self.values):
             return None
         return self.values[field_index]
 
