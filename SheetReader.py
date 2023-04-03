@@ -4,14 +4,22 @@ from string import ascii_letters
 from google_sheets_api import GoogleSheetsConnector
 
 """ A1 => 1 """
+
+
 def get_row_from_cell(cell):
-    return int(re.split('[a-zA-Z]+', cell)[1])
+    return int(re.split("[a-zA-Z]+", cell)[1])
+
 
 """ A1 => A """
+
+
 def get_col_from_cell(cell):
-    return re.split('\d+', cell)[0]
+    return re.split("\d+", cell)[0]
+
 
 """ 0 => A """
+
+
 def number_to_excel_column(n):
     string = ""
     while n > 0:
@@ -19,13 +27,17 @@ def number_to_excel_column(n):
         string = chr(65 + remainder) + string
     return string
 
+
 """ A => 0 """
+
+
 def excel_column_to_number(col):
     num = 0
     for c in col:
         if c in ascii_letters:
-            num = num * 26 + (ord(c.upper()) - ord('A')) + 1
+            num = num * 26 + (ord(c.upper()) - ord("A")) + 1
     return num
+
 
 class SheetReader:
     """
@@ -33,9 +45,17 @@ class SheetReader:
     which provide access to each row at a time.
     """
 
-    def __init__(self, workbook_id, sheet_name, header_range=[], data_range=[], read_chunk_size=100, write_chunk_size=100, auto_update=True):
-
-        self.workbook_id = workbook_id
+    def __init__(
+        self,
+        workbook_id,
+        sheet_name,
+        header_range=[],
+        data_range=[],
+        read_chunk_size=100,
+        write_chunk_size=100,
+        auto_update=True,
+    ):
+        self.workbook_id = self.parse_workbook_id(workbook_id)
         self.sheet_name = sheet_name
 
         self.header_start_cell = header_range[0]
@@ -44,6 +64,9 @@ class SheetReader:
         self.data_end_cell = data_range[1]
         self.data_start_col = get_col_from_cell(self.data_start_cell)
         self.data_end_col = get_col_from_cell(self.data_end_cell)
+        self.num_cols = excel_column_to_number(
+            self.data_end_col
+        ) - excel_column_to_number(self.data_start_col)
 
         self.read_chunk_size = read_chunk_size
         self.write_chunk_size = write_chunk_size
@@ -54,30 +77,46 @@ class SheetReader:
 
         # Internal State for read chunks
         self.current_read_chunk = []
-        self.read_chunk_start = None # row
-        self.read_chunk_end = start_row - 1 # row
-        self.current_row_index = start_row - 1 # current iteration
+        self.read_chunk_start = None  # row
+        self.read_chunk_end = start_row - 1  # row
+        self.current_row_index = start_row - 1  # current iteration
 
-        self.connection = GoogleSheetsConnector(workbook_id, sheet_name)
+        self.connection = GoogleSheetsConnector(self.workbook_id, sheet_name)
 
         self.headers = []
-        self.header_map = {} # {'name':0, 'age':1, ... }, offset from first column in the dataset
+        self.header_map = (
+            {}
+        )  # {'name':0, 'age':1, ... }, offset from first column in the dataset
         self.get_headers()
 
-
         if len(data_range) < 2:
-            raise ValueError('SheetReader data_range must contain at a start and end cell')
+            raise ValueError(
+                "SheetReader data_range must contain at a start and end cell"
+            )
 
         if len(header_range) < 2:
-            raise ValueError('SheetReader header_range must contain at a start and end cell')
+            raise ValueError(
+                "SheetReader header_range must contain at a start and end cell"
+            )
 
         header_start_row = get_row_from_cell(self.header_start_cell)
         header_end_row = get_row_from_cell(self.header_end_cell)
         if header_start_row != header_end_row:
-            raise ValueError('SheetReader header_range must be one row')
+            raise ValueError("SheetReader header_range must be one row")
+
+    def parse_workbook_id(self, workbook_id):
+        workbook_regex = (
+            r"https:\/\/docs.google.com\/spreadsheets\/d\/(.+)\/edit\#gid\=0"
+        )
+        workbook_match = re.search(workbook_regex, workbook_id)
+        if workbook_id[:8] == "https://":
+            return workbook_match.group(1)
+        return workbook_id
 
     def get_headers(self):
-        raw_values = self.connection.read_range(self.header_start_cell, self.header_end_cell)
+        raw_values = self.connection.read_range(
+            self.header_start_cell, self.header_end_cell
+        )
         self.headers = raw_values[0]
 
         # Create a map from header name to it's column index, eg. 'Name' => Column 0
@@ -85,30 +124,31 @@ class SheetReader:
         self.header_map = {header: index for (index, header) in enumerate(self.headers)}
 
     def update(self):
-        '''
-            Rather than make a request for each write, we save them in memory
-            and write them in chunks of write_chunk_size
-        '''
+        """
+        Rather than make a request for each write, we save them in memory
+        and write them in chunks of write_chunk_size
+        """
         self.connection.bulk_write_range(self.write_map)
         self.write_map = {}
 
-
     def get_row_values(self, row_index):
-        '''
-            Rather than make a request to the spreadsheet for each row,
-            save a chunk in memory of size read_chunk_size
-            and read more when we run out
-        '''
-        if row_index > self.read_chunk_end: # we don't have the row in memory
+        """
+        Rather than make a request to the spreadsheet for each row,
+        save a chunk in memory of size read_chunk_size
+        and read more when we run out
+        """
+        if row_index > self.read_chunk_end:  # we don't have the row in memory
             new_chunk_start = self.read_chunk_end + 1
+            # It's ok if new_chunk_end is past the last row, because we'll stop iterating
+            # todo: what if end is after the data and the rows are totally empty
             new_chunk_end = self.read_chunk_end + self.read_chunk_size
-            if (new_chunk_end) > get_row_from_cell(self.data_end_cell): # don't shoot past the desired range
-                new_chunk_end = self.read_chunk_end + self.read_chunk_end
 
             # get the chunk
             new_chunk_start_cell = self.data_start_col + str(new_chunk_start)
             new_chunk_end_cell = self.data_end_col + str(new_chunk_end)
-            self.current_read_chunk = self.connection.read_range(new_chunk_start_cell, new_chunk_end_cell)
+            self.current_read_chunk = self.connection.read_range(
+                new_chunk_start_cell, new_chunk_end_cell
+            )
 
             # update our indexes
             self.read_chunk_start = new_chunk_start
@@ -116,11 +156,12 @@ class SheetReader:
 
             return self.current_read_chunk[row_index - self.read_chunk_start]
 
-        elif (row_index >= self.read_chunk_start) and (row_index <= self.read_chunk_end):
+        elif (row_index >= self.read_chunk_start) and (
+            row_index <= self.read_chunk_end
+        ):
             # todo: check if the range the specified is too big
             # except IndexError:
             return self.current_read_chunk[row_index - self.read_chunk_start]
-
 
     def __iter__(self):
         return self
@@ -136,11 +177,12 @@ class SheetReader:
             data_range = (data_start_cell, data_end_cell)
             return Row(self, data_range, row_values)
 
-        next = __next__ # Python 2 iterators look for "next"
+        next = __next__  # Python 2 iterators look for "next"
 
     def __del__(self):
         if bool(self.write_map):
             self.update()
+
 
 class Row:
     """
@@ -151,7 +193,6 @@ class Row:
     """
 
     def __init__(self, sheet_reader_instance, data_range, values):
-
         self.sheet_reader_instance = sheet_reader_instance
         self.workbook_id = sheet_reader_instance.workbook_id
         self.sheet_name = sheet_reader_instance.sheet_name
@@ -165,11 +206,14 @@ class Row:
         self.values = values
 
     def __getitem__(self, key):
-        # todo: throw error if doesn't exist
-        field_index = self.header_map.get(key, '___') # todo, this used to be None, but would fail the next check on col '0'
-        # if not field_index:
-        if field_index == '___':
+        if key not in self.header_map:
             raise KeyError
+
+        field_index = self.header_map.get(key)
+
+        # If a row has empty columns at the end, we need to extend the array
+        if field_index > len(self.values):
+            return None
         return self.values[field_index]
 
     def __setitem__(self, key, value, immediate_update=False):
@@ -178,7 +222,7 @@ class Row:
         if not cell_col:
             raise KeyError
         # offset by the range of the dataset start cell
-        data_start_col = get_col_from_cell(self.data_start_cell) # returns a letter
+        data_start_col = get_col_from_cell(self.data_start_cell)  # returns a letter
         data_start_col = excel_column_to_number(data_start_col)
         cell_col = data_start_col + cell_col
         cell_col = number_to_excel_column(cell_col)
@@ -187,10 +231,11 @@ class Row:
         destination_cell = cell_col + str(self.current_row_index)
         # value = [[value]]
 
-        # print 'Set cell %s to "%s"' % (destination_cell, value)
         # We try to group writes (to minimize https requests)
         if immediate_update:
-            self.sheet_reader_instance.connection.write_range(destination_cell, destination_cell, [[value]])
+            self.sheet_reader_instance.connection.write_range(
+                destination_cell, destination_cell, [[value]]
+            )
             return
 
         self.write_map[destination_cell] = value
@@ -202,7 +247,6 @@ class Row:
             self.sheet_reader_instance.update()
 
     def __str__(self):
-
         # return ','.join(self.values)
 
         pretty_dict = {}
